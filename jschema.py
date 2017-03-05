@@ -89,6 +89,10 @@ class JsonRecord(type):
             def __getattr__(self, item):
                 return self.get(item)  # get instead of getitem so absent Optionals return None
 
+            def __setattr__(self, key, value):
+                assert_type(value, type(self).schema[key])
+                self[key] = value
+
             def __repr__(self):
                 return "{}({})".format(name, dict(self))
 
