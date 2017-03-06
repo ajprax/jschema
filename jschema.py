@@ -77,6 +77,7 @@ class JsonRecord(type):
                 return cls.from_dict(json.loads(json_str))
 
             def to_json(self):
+                assert_isinstance(self, type(self))
                 return json.dumps(self)
 
             def __init__(self, **kw):
