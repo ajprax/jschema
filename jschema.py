@@ -20,13 +20,13 @@ def assert_isinstance(value, _type):
                 except TypeError:
                     pass
             else:  # no break means no match
-                raise TypeError("{} is not in {}".format(value, _type))
+                raise TypeError("{!r} is not in {}".format(value, _type))
         except AttributeError:
             raise ValueError("Unrecognized non-class type {}".format(_type))
     else:
         if isinstance(_type, JsonRecord):
             if not isinstance(value, _type):
-                raise TypeError("{} is not of type {}".format(value, type.__name__))
+                raise TypeError("{!r} is not of type {}".format(value, type.__name__))
             for f, f_type in _type.schema.items():
                 assert_isinstance(value.get(f), f_type)
         elif issubclass(_type, Dict):
@@ -43,7 +43,7 @@ def assert_isinstance(value, _type):
                 assert_isinstance(item, union_branch)
         else:
             if not isinstance(value, _type):
-                raise TypeError("{} is not of type {}".format(value, _type.__name__))
+                raise TypeError("{!r} is not of type {}".format(value, _type.__name__))
 
 
 class JsonRecord(type):
@@ -80,14 +80,12 @@ class JsonRecord(type):
                 assert_isinstance(self, type(self))
                 return json.dumps(self)
 
-            def __init__(self, **kw):
-                for field, typ in dct["schema"].items():
-                    value = kw.get(field)
-                    assert_isinstance(value, typ)
-                    # we want to check the type even if the value is absent since the type must be
-                    # Optional, but we only want to set present values
-                    if field in kw:
-                        self[field] = value
+            def __init__(self, *a, **kw):
+                for a_dict in a:
+                    for k, v in a_dict.items():
+                        self[k] = v
+                for k, v in kw.items():
+                    self[k] = v
 
             def _validate_key(self, key):
                 if not key in type(self).schema:
