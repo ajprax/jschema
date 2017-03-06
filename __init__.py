@@ -1,6 +1,6 @@
 from inspect import isclass
 
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 
 # TODO improve handling of non-string keys
