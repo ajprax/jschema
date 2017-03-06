@@ -43,6 +43,8 @@ def _assert_isinstance(value, _type):
             for item, union_branch in zip(value, _type.__args__):
                 _assert_isinstance(item, union_branch)
         else:
+            if _type is float:  # JSON numbers may be parsed as ints when we expect floats
+                _type = (int, float)
             if not isinstance(value, _type):
                 raise TypeError("{!r} is not of type {}".format(value, _type.__name__))
 
