@@ -88,15 +88,26 @@ class JsonRecord(type):
                     if field in kw:
                         self[field] = value
 
+            def _validate_key(self, key):
+                if not key in type(self).schema:
+                    raise KeyError(key)
+
+            def __getitem__(self, item):
+                self._validate_key(item)
+                return self.get(item)  # absent Optionals should return None
+
             def __getattr__(self, item):
-                return self.get(item)  # get instead of getitem so absent Optionals return None
+                return self[item]
+
+            def __setitem__(self, key, value):
+                self._validate_key(key)
+                assert_isinstance(value, type(self).schema[key])
+                super(_JsonRecordSuper, self).__setitem__(key, value)
 
             def __setattr__(self, key, value):
-                assert_isinstance(value, type(self).schema[key])
                 self[key] = value
 
             def __repr__(self):
                 return "{}({})".format(name, dict(self))
 
         return super(JsonRecord, meta).__new__(meta, name, bases + (_JsonRecordSuper,), dct)
-
