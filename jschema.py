@@ -1,4 +1,3 @@
-import json
 from inspect import isclass
 
 from typing import Dict, List, Tuple
@@ -7,7 +6,7 @@ from typing import Dict, List, Tuple
 # TODO improve handling of non-string keys
 
 
-def assert_isinstance(value, _type):
+def _assert_isinstance(value, _type):
     """Check if a value conforms to a type (recursively for collections and records)."""
     if not isinstance(type(_type), type):
         raise ValueError("_type must be a type, but got: {}".format(_type))
@@ -15,7 +14,7 @@ def assert_isinstance(value, _type):
         try:
             for union_branch in _type.__args__:
                 try:
-                    assert_isinstance(value, union_branch)
+                    _assert_isinstance(value, union_branch)
                     break
                 except TypeError:
                     pass
@@ -28,19 +27,19 @@ def assert_isinstance(value, _type):
             if not isinstance(value, _type):
                 raise TypeError("{!r} is not of type {}".format(value, type.__name__))
             for f, f_type in _type.schema.items():
-                assert_isinstance(value.get(f), f_type)
+                _assert_isinstance(value.get(f), f_type)
         elif issubclass(_type, Dict):
             k_type, v_type = _type.__args__
             for k, v in value.items():
-                assert_isinstance(k, k_type)  # kind of meaningless since keys have to be str
-                assert_isinstance(v, v_type)
+                _assert_isinstance(k, k_type)  # kind of meaningless since keys have to be str
+                _assert_isinstance(v, v_type)
         elif issubclass(_type, List):
             e_type, = _type.__args__  # args is a 1-tuple for list, so the trailing comma is needed
             for e in value:
-                assert_isinstance(e, e_type)
+                _assert_isinstance(e, e_type)
         elif issubclass(_type, Tuple):
             for item, union_branch in zip(value, _type.__args__):
-                assert_isinstance(item, union_branch)
+                _assert_isinstance(item, union_branch)
         else:
             if not isinstance(value, _type):
                 raise TypeError("{!r} is not of type {}".format(value, _type.__name__))
@@ -70,7 +69,7 @@ class JsonRecord(type):
                     self[k] = v
 
             def _validate_key(self, key):
-                if not key in type(self).schema:
+                if key not in type(self).schema:
                     raise KeyError(key)
 
             def __getitem__(self, item):
@@ -82,7 +81,7 @@ class JsonRecord(type):
 
             def __setitem__(self, key, value):
                 self._validate_key(key)
-                assert_isinstance(value, type(self).schema[key])
+                _assert_isinstance(value, type(self).schema[key])
                 super(_JsonRecordSuper, self).__setitem__(key, value)
 
             def __setattr__(self, key, value):
