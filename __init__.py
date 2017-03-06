@@ -16,6 +16,7 @@ def _assert_isinstance(value, _type):
         try:
             for union_branch in _type.__args__:
                 try:
+
                     _assert_isinstance(value, union_branch)
                     break
                 except TypeError:
@@ -27,26 +28,34 @@ def _assert_isinstance(value, _type):
     else:
         if isinstance(_type, JsonRecord):
             if not isinstance(value, _type):
-                raise TypeError("{!r} is not of type {}".format(value, type.__name__))
+                raise TypeError("{!r} is not of type {}".format(value, _type))
             for f, f_type in _type.schema.items():
                 _assert_isinstance(value.get(f), f_type)
         elif issubclass(_type, Dict):
+            if not isinstance(value, Dict):
+                raise TypeError("{!r} is not of type {}".format(value, _type))
             k_type, v_type = _type.__args__
             for k, v in value.items():
                 _assert_isinstance(k, k_type)  # kind of meaningless since keys have to be str
                 _assert_isinstance(v, v_type)
         elif issubclass(_type, List):
+            if not isinstance(value, List):
+                raise TypeError("{!r} is not of type {}".format(value, _type))
             e_type, = _type.__args__  # args is a 1-tuple for list, so the trailing comma is needed
             for e in value:
                 _assert_isinstance(e, e_type)
         elif issubclass(_type, Tuple):
+            if not isinstance(value, (Tuple, List)):
+                raise TypeError("{!r} is not of type {}".format(value, _type))
             for item, union_branch in zip(value, _type.__args__):
                 _assert_isinstance(item, union_branch)
         else:
+            if _type is int and type(value) is bool:  # bool passes isinstance(b, int)
+                raise TypeError("{!r} is not of type {}".format(value, _type))
             if _type is float:  # JSON numbers may be parsed as ints when we expect floats
                 _type = (int, float)
             if not isinstance(value, _type):
-                raise TypeError("{!r} is not of type {}".format(value, _type.__name__))
+                raise TypeError("{!r} is not of type {}".format(value, _type))
 
 
 class JsonRecord(type):
@@ -69,6 +78,9 @@ class JsonRecord(type):
                 for a_dict in a + (kw,):
                     for k, v in a_dict.items():
                         self[k] = v
+                for f, f_type in type(self).schema.items():
+                    # TODO find a way to only check for presence of required fields
+                    _assert_isinstance(self[f], f_type)
 
             def _validate_key(self, key):
                 if key not in type(self).schema:
