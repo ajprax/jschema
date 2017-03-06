@@ -10,7 +10,9 @@ def _assert_isinstance(value, _type):
     """Check if a value conforms to a type (recursively for collections and records)."""
     if not isinstance(type(_type), type):
         raise ValueError("_type must be a type, but got: {}".format(_type))
-    if not isclass(_type):  # Union is a type but isn't a class, so issubclass would raise
+    if not isclass(_type):  # Any and Union are types but aren't classes
+        if _type is Any:
+            return
         try:
             for union_branch in _type.__args__:
                 try:
@@ -61,6 +63,11 @@ class JsonRecord(type):
     """
     def __new__(meta, name, bases, dct):
         class _JsonRecordSuper(dict):
+            def __init__(self, *a, **kw):
+                for a_dict in a + (kw,):
+                    for k, v in a_dict.items():
+                        self[k] = v
+
             def _validate_key(self, key):
                 if key not in type(self).schema:
                     raise KeyError(key)
