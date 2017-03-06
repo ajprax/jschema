@@ -62,24 +62,6 @@ class JsonRecord(type):
     """
     def __new__(meta, name, bases, dct):
         class _JsonRecordSuper(dict):
-            @classmethod
-            def from_dict(cls, _dct):
-                fs = {}
-                for field, _type in cls.schema.items():
-                    if isinstance(_type, JsonRecord):
-                        fs[field] = _type.from_dict(_dct.get(field, {}))
-                    elif field in _dct:
-                        fs[field] = _dct[field]
-                return cls(**fs)
-
-            @classmethod
-            def from_json(cls, json_str):
-                return cls.from_dict(json.loads(json_str))
-
-            def to_json(self):
-                assert_isinstance(self, type(self))
-                return json.dumps(self)
-
             def __init__(self, *a, **kw):
                 for a_dict in a:
                     for k, v in a_dict.items():
