@@ -61,13 +61,6 @@ class JsonRecord(type):
     """
     def __new__(meta, name, bases, dct):
         class _JsonRecordSuper(dict):
-            def __init__(self, *a, **kw):
-                for a_dict in a:
-                    for k, v in a_dict.items():
-                        self[k] = v
-                for k, v in kw.items():
-                    self[k] = v
-
             def _validate_key(self, key):
                 if key not in type(self).schema:
                     raise KeyError(key)
