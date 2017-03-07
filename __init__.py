@@ -6,55 +6,65 @@ from typing import Any, Dict, List, Tuple
 # TODO improve handling of non-string keys
 
 
-def _assert_isinstance(value, _type):
-    """Check if a value conforms to a type (recursively for collections and records)."""
+def _find_type_errors(value, _type):
     if not isinstance(type(_type), type):
         raise ValueError("_type must be a type, but got: {}".format(_type))
     if not isclass(_type):  # Any and Union are types but aren't classes
         if _type is Any:
-            return
-        try:
-            for union_branch in _type.__args__:
-                try:
-                    _assert_isinstance(value, union_branch)
+            yield from ()
+        else:
+            for branch in _type.__args__:
+                errors = list(_find_type_errors(value, branch))
+                if not errors:
                     break
-                except TypeError:
-                    pass
-            else:  # no break means no match
-                raise TypeError("{!r} is not in {}".format(value, _type))
-        except AttributeError:
-            raise ValueError("Unrecognized non-class type {}".format(_type))
+            else:  # no break means no matching branch
+                yield "{!r} is not in {}".format(value, _type)
     else:
         if isinstance(_type, JsonRecord):
             if not isinstance(value, _type):
-                raise TypeError("{!r} is not of type {}".format(value, _type))
-            for f, f_type in _type.schema.items():
-                _assert_isinstance(value.get(f), f_type)
+                yield "{!r} is not of type {}".format(value, _type)
+            else:
+                for f, f_type in _type.schema.items():
+                    yield from ("""["{}"]: {}""".format(f, e) for e in _find_type_errors(value.get(f), f_type))
         elif issubclass(_type, Dict):
             if not isinstance(value, Dict):
-                raise TypeError("{!r} is not of type {}".format(value, _type))
-            k_type, v_type = _type.__args__
-            for k, v in value.items():
-                _assert_isinstance(k, k_type)  # kind of meaningless since keys have to be str
-                _assert_isinstance(v, v_type)
+                yield "{!r} is not of type {}".format(value, _type)
+            else:
+                k_type, v_type = _type.__args__
+                for k, v in value.items():
+                    yield from ("invalid key: {}".format(e) for e in _find_type_errors(k, k_type))
+                    yield from ("invalid value: {}".format(e) for e in _find_type_errors(v, v_type))
         elif issubclass(_type, List):
             if not isinstance(value, List):
-                raise TypeError("{!r} is not of type {}".format(value, _type))
-            e_type, = _type.__args__  # args is a 1-tuple for list, so the trailing comma is needed
-            for e in value:
-                _assert_isinstance(e, e_type)
+                yield "{!r} is not of type {}".format(value, _type)
+            else:
+                i_type, = _type.__args__  # args is a 1-tuple so we need the trailing comma
+                for i in value:
+                    yield from ("invalid element: {}".format(e) for e in _find_type_errors(i, i_type))
         elif issubclass(_type, Tuple):
             if not isinstance(value, (Tuple, List)):
-                raise TypeError("{!r} is not of type {}".format(value, _type))
-            for item, index_type in zip(value, _type.__args__):
-                _assert_isinstance(item, index_type)
+                yield "{!r} is not of type {}".format(value, _type)
+            else:
+                for index, (i, i_type) in enumerate(zip(value, _type.__args__)):
+                    yield from ("invalid element at index {}: {}".format(index, e) for e in _find_type_errors(i, i_type))
         else:
-            if _type is int and type(value) is bool:  # bool passes isinstance(b, int)
-                raise TypeError("{!r} is not of type {}".format(value, _type))
-            if _type is float:  # JSON numbers may be parsed as ints when we expect floats
-                _type = (int, float)
-            if not isinstance(value, _type):
-                raise TypeError("{!r} is not of type {}".format(value, _type))
+            if _type is int and type(value) is bool:
+                yield "{!r} is not of type {}".format(value, _type)
+            else:
+                if _type is float:
+                    _type = (int, float)
+                if not isinstance(value, _type):
+                    yield "{!r} is not of type {}".format(value, _type)
+
+
+def _assert_isinstance(value, _type):
+    """Check if a value conforms to a type (recursively for collections and records)."""
+    print("{}:{}".format(value, _type))
+    errors = list(_find_type_errors(value, _type))
+    if errors:
+        raise TypeError("; ".join(errors))
+    else:
+        return
 
 
 def _coerce_records(value, _type):
@@ -81,16 +91,21 @@ def _coerce_records(value, _type):
         if isinstance(_type, JsonRecord):
             return _type(value)
         elif issubclass(_type, List):
-            e_type, = _type.__args__
-            return [_coerce_records(e, e_type) for e in value]
+            if isinstance(value, List):
+                e_type, = _type.__args__
+                return [_coerce_records(e, e_type) for e in value]
+            return value
         elif issubclass(_type, Tuple):
-            return [_coerce_records(e, index_type) for e, index_type in zip(value, _type.__args__)]
+            if isinstance(value, (Tuple, List)):
+                return [_coerce_records(e, index_type) for e, index_type in zip(value, _type.__args__)]
+            return value
         elif issubclass(_type, Dict):
-            k_type, v_type = _type.__args__
-            return {k: _coerce_records(v, v_type) for k, v in value.items()}
+            if isinstance(value, Dict):
+                k_type, v_type = _type.__args__
+                return {k: _coerce_records(v, v_type) for k, v in value.items()}
+            return value
         else:
             return value
-
 
 
 class JsonRecord(type):
@@ -107,15 +122,13 @@ class JsonRecord(type):
             "complex_field": Dict[str, List[Union[int, bool, str]]],
         }
     """
-    def __new__(meta, name, bases, dct):
+    def __new__(mcs, name, bases, dct):
         class _JsonRecordSuper(dict):
             def __init__(self, *a, **kw):
                 for a_dict in a + (kw,):
                     for k, v in a_dict.items():
                         self[k] = v
-                for f, f_type in type(self).schema.items():
-                    # TODO find a way to only check for presence of required fields
-                    _assert_isinstance(self[f], f_type)
+                _assert_isinstance(self, type(self))
 
             def _validate_key(self, key):
                 if key not in type(self).schema:
@@ -141,4 +154,4 @@ class JsonRecord(type):
             def __repr__(self):
                 return "{}({})".format(name, dict(self))
 
-        return super(JsonRecord, meta).__new__(meta, name, bases + (_JsonRecordSuper,), dct)
+        return super(JsonRecord, mcs).__new__(mcs, name, bases + (_JsonRecordSuper,), dct)

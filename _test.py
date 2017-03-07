@@ -152,7 +152,7 @@ def test_dict():
         pass
 
 def test_tuple():
-    assert TupleRecord(tuple=("a", 1)).tuple == ("a", 1)
+    assert TupleRecord(tuple=("a", 1)).tuple == ["a", 1]
     assert TupleRecord(tuple=["a", 1]).tuple == ["a", 1]
     try:
         TupleRecord()
