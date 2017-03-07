@@ -24,7 +24,7 @@ def _find_type_errors(value, _type):
             if not isinstance(value, _type):
                 yield "{!r} is not of type {}".format(value, _type)
             else:
-                for f, f_type in _type.schema.items():
+                for f, f_type in _get_schema(_type).items():
                     yield from ("""["{}"]: {}""".format(f, e) for e in _find_type_errors(value.get(f), f_type))
         elif issubclass(_type, Dict):
             if not isinstance(value, Dict):
@@ -107,6 +107,14 @@ def _coerce_records(value, _type):
             return value
 
 
+def _get_schema(_type):
+    s = _type.schema
+    if isinstance(s, Dict):
+        return s
+    else:
+        return s()
+
+
 class JsonRecord(type):
     """
     Metaclass for records which can be represented in JSON.
@@ -130,7 +138,7 @@ class JsonRecord(type):
                 _assert_isinstance(self, type(self))
 
             def _validate_key(self, key):
-                if key not in type(self).schema:
+                if key not in _get_schema(type(self)):
                     raise KeyError(key)
 
             def __getitem__(self, item):
@@ -142,7 +150,7 @@ class JsonRecord(type):
 
             def __setitem__(self, key, value):
                 self._validate_key(key)
-                _type = type(self).schema[key]
+                _type = _get_schema(type(self))[key]
                 value = _coerce_records(value, _type)
                 _assert_isinstance(value, _type)
                 super(_JsonRecordSuper, self).__setitem__(key, value)
