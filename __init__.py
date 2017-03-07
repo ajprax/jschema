@@ -59,7 +59,6 @@ def _find_type_errors(value, _type):
 
 def _assert_isinstance(value, _type):
     """Check if a value conforms to a type (recursively for collections and records)."""
-    print("{}:{}".format(value, _type))
     errors = list(_find_type_errors(value, _type))
     if errors:
         raise TypeError("; ".join(errors))
