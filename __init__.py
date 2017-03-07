@@ -88,7 +88,9 @@ def _coerce_records(value, _type):
         return value
     else:
         if isinstance(_type, JsonRecord):
-            return _type(value)
+            if isinstance(value, Dict):
+                return _type(value)
+            return value
         elif issubclass(_type, List):
             if isinstance(value, List):
                 e_type, = _type.__args__

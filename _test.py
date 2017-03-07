@@ -39,6 +39,15 @@ class UnionRecord(metaclass=JsonRecord):
     schema = {"union": Union[str, int]}
 
 
+class NestedRecord(metaclass=JsonRecord):
+    class InnerRecord(metaclass=JsonRecord):
+        schema = {"foo": str}
+
+    schema = {
+        "inner": InnerRecord
+    }
+
+
 def test_constructor():
     assert StrRecord(str="bar").str == "bar"
     assert StrRecord({"str": "bar"}).str == "bar"
@@ -175,6 +184,20 @@ def test_union():
         pass
     try:
         UnionRecord(union=[])
+        assert False
+    except TypeError:
+        pass
+
+def test_nested():
+    inner = NestedRecord.InnerRecord(foo="bar")
+    assert NestedRecord(inner=inner).inner == inner
+    try:
+        NestedRecord()
+        assert False
+    except TypeError:
+        pass
+    try:
+        NestedRecord(inner=5)
         assert False
     except TypeError:
         pass
