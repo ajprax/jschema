@@ -16,7 +16,6 @@ def _assert_isinstance(value, _type):
         try:
             for union_branch in _type.__args__:
                 try:
-
                     _assert_isinstance(value, union_branch)
                     break
                 except TypeError:
@@ -47,8 +46,8 @@ def _assert_isinstance(value, _type):
         elif issubclass(_type, Tuple):
             if not isinstance(value, (Tuple, List)):
                 raise TypeError("{!r} is not of type {}".format(value, _type))
-            for item, union_branch in zip(value, _type.__args__):
-                _assert_isinstance(item, union_branch)
+            for item, index_type in zip(value, _type.__args__):
+                _assert_isinstance(item, index_type)
         else:
             if _type is int and type(value) is bool:  # bool passes isinstance(b, int)
                 raise TypeError("{!r} is not of type {}".format(value, _type))
@@ -56,6 +55,42 @@ def _assert_isinstance(value, _type):
                 _type = (int, float)
             if not isinstance(value, _type):
                 raise TypeError("{!r} is not of type {}".format(value, _type))
+
+
+def _coerce_records(value, _type):
+    """Coerce dictionaries into record types where appropriate."""
+    if not isinstance(type(_type), type):
+        raise ValueError("_type must be a type, but got: {}".format(_type))
+    if not isclass(_type):  # Any and Union are types but aren't classes
+        if _type is Any:
+            return value
+        for branch in _type.__args__:  # return the first coercion that sticks
+            if isinstance(branch, JsonRecord):
+                try:
+                    return branch(value)
+                except TypeError:
+                    pass
+            elif issubclass(branch, Dict):
+                try:
+                    _assert_isinstance(value, branch)
+                    return value
+                except TypeError:
+                    pass
+        return value
+    else:
+        if isinstance(_type, JsonRecord):
+            return _type(value)
+        elif issubclass(_type, List):
+            e_type, = _type.__args__
+            return [_coerce_records(e, e_type) for e in value]
+        elif issubclass(_type, Tuple):
+            return [_coerce_records(e, index_type) for e, index_type in zip(value, _type.__args__)]
+        elif issubclass(_type, Dict):
+            k_type, v_type = _type.__args__
+            return {k: _coerce_records(v, v_type) for k, v in value.items()}
+        else:
+            return value
+
 
 
 class JsonRecord(type):
@@ -95,7 +130,9 @@ class JsonRecord(type):
 
             def __setitem__(self, key, value):
                 self._validate_key(key)
-                _assert_isinstance(value, type(self).schema[key])
+                _type = type(self).schema[key]
+                value = _coerce_records(value, _type)
+                _assert_isinstance(value, _type)
                 super(_JsonRecordSuper, self).__setitem__(key, value)
 
             def __setattr__(self, key, value):
