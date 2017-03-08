@@ -201,3 +201,8 @@ def test_nested():
         assert False
     except TypeError:
         pass
+    try:
+        NestedRecord({"inner": {"foo": 5}})
+        assert False
+    except TypeError:
+        pass

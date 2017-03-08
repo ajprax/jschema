@@ -136,7 +136,10 @@ class JsonRecord(type):
             def __init__(self, *a, **kw):
                 for a_dict in a + (kw,):
                     for k, v in a_dict.items():
-                        self[k] = v
+                        try:
+                            self[k] = v
+                        except TypeError as te:
+                            raise TypeError("""["{}"]: {}""".format(k, te))
                 _assert_isinstance(self, type(self))
 
             def _validate_key(self, key):
