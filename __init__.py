@@ -74,6 +74,8 @@ def _coerce_records(value, _type):
         if _type is Any:
             return value
         for branch in _type.__args__:  # return the first coercion that sticks
+            if branch is Any:
+                return value
             if isinstance(branch, JsonRecord):
                 try:
                     return branch(value)
